@@ -1,18 +1,32 @@
-/**
- * Welcome to Cloudflare Workers! This is your first worker.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `npm run deploy` to publish your worker
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
+import sharp from "sharp";
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
-		return new Response('Hello World!');
+		let { pathname } = new URL(request.url);
+		pathname = pathname.slice(1);
+
+		if (pathname === "list") {
+			const list = await env.IMAGES.list();
+
+			const svg = `
+				<svg width="800" height="400">
+					<rect width="800" height="400" fill="#333"/>
+					<text x="50" y="120" font-size="64" fill="white">
+						${list.objects.map((element) => element.key).toString()}
+					</text>
+				</svg>
+			`;
+
+
+			return new Response(await sharp(Buffer.from(svg)).png().toBuffer(), {
+				headers: { "Content-Type": "image/gif" },
+			});
+		}
+
+		const asset = await env.IMAGES.get(pathname)
+
+		return new Response(await asset?.arrayBuffer(), {
+			headers: { "Content-Type": "image/gif" },
+		});
 	},
 } satisfies ExportedHandler<Env>;
