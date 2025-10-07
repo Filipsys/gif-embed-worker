@@ -17,6 +17,6 @@
 		"wrangler": "^4.42.0"
 	},
 	"dependencies": {
-		"pnglib-es6": "^1.0.1"
+		"@resvg/resvg-wasm": "^2.6.2"
 	}
 }

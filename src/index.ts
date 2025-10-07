@@ -1,7 +1,16 @@
-import PNGImage from "pnglib-es6";
+import { initWasm, Resvg } from "@resvg/resvg-wasm";
+
+let wasmReady: Promise<void> | null = null;
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
+		if (!wasmReady) {
+			const wasmAsset = await env.ASSETS.fetch("index_bg.wasm");
+			wasmReady = initWasm(wasmAsset);
+		}
+
+    await wasmReady;
+
 		let { pathname } = new URL(request.url);
 		pathname = pathname.slice(1);
 
@@ -30,6 +39,8 @@ export default {
 						window.crypto.subtle.digest("SHA-256", encoder.encode(passwordField)).then(value => {
 							console.log(value.byteLength);
 						});
+
+						fetch()
 					});
 				</script>
 			`;
@@ -39,7 +50,7 @@ export default {
 			});
 		}
 
-		if (pathname === "list.png") {
+		if (pathname === "list") {
 			const list = await env.IMAGES.list();
 
 			// const svg = `
@@ -51,15 +62,26 @@ export default {
 			// 	</svg>
 			// `;
 
-			const image = new PNGImage(100, 100, 8);
-			const binary = Uint8Array.from(atob(image.getBase64()), (char) => char.charCodeAt(0));
+			const svg = `<svg width="400" height="200"><text x="20" y="100">Hello!</text></svg>`;
+			const resvg = new Resvg(svg);
+			const png = resvg.render().asPng();
 
-			return new Response(binary, {
-				headers: { "Content-Type": "image/png" },
-			});
+			return new Response(png, { headers: { "Content-Type": "image/png" } });
 		}
 
-		const asset = await env.IMAGES.get(pathname)
+		if (pathname === "performlogin" && request.method === "POST") {
+			if (request.headers.get("Authorization") === null) return new Response("No authorization header", { status: 200 });
+
+    // Base64 sha-256
+			if (request.headers.get("Authorization") !== env.AUTHKEY) return new Response("Incorrect password", { status: 200 });
+		}
+
+		let asset;
+		if (!pathname.endsWith(".gif")) {
+			asset = await env.IMAGES.get(pathname + ".gif");
+		} else {
+			asset = await env.IMAGES.get(pathname);
+		}
 
 		return new Response(await asset?.arrayBuffer(), {
 			headers: { "Content-Type": "image/gif" },
