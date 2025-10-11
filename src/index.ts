@@ -1,47 +1,76 @@
-import { initWasm, Resvg } from "@resvg/resvg-wasm";
-
-let wasmReady: Promise<void> | null = null;
+// import { initWasm, Resvg } from "@resvg/resvg-wasm";
+// let wasmReady: Promise<void> | null = null;
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
-		if (!wasmReady) {
-			const wasmAsset = await env.ASSETS.fetch("index_bg.wasm");
-			wasmReady = initWasm(wasmAsset);
-		}
-
-    await wasmReady;
+		// if (!wasmReady) {
+		// 	const wasmAsset = await env.ASSETS.fetch("index_bg.wasm");
+		// 	wasmReady = initWasm(wasmAsset);
+		// }
+		//
+  //   await wasmReady;
 
 		let { pathname } = new URL(request.url);
 		pathname = pathname.slice(1);
 
+		if (pathname === "new" && request.method === "POST") {
+			if (request.headers.get("Authorization") === null) {
+        return new Response("No authorization header", { status: 401 });
+      }
+
+			if (request.headers.get("Authorization") !== env.AUTHKEY) {
+        return new Response("Incorrect password", { status: 401 });
+      }
+
+      const data = await request.formData();
+      const name = data.get("name") as string;
+      const image = data.get("file") as File;
+      if (!data || !name || !image) {
+        return new Response("Missing data", { status: 401 });
+      }
+      
+      await env.IMAGES.put(name, image);
+      return new Response("Successfully added asset", { status: 200 });
+		}
+
 		if (pathname === "new") {
 			const htmlData = `
-				<div style="width:100%; height:100dvh; display:flex; flex-direction:column;
+				<form style="width:100%; height:100dvh; display:flex; flex-direction:column;
 										justify-content:center; align-items:center">
 					<div>
 						<label>Key:</label>
-						<input type="password" id="password" />
+						<input type="password" name="password" id="password" required />
 					</div>
 
-					<input type="file" id="file" accept="image/png, image/jpeg, image/webp, image/gif" />
+					<input type="file" name="file" id="file" required accept="image/png, image/jpeg, image/webp, image/gif" />
 					<button type="submit" id="submit">Submit</button>
-				</div>
+				</form>
 
 				<script>
-					document.getElementById("submit").addEventListener("click", () => {
-						const passwordField = document.getElementById("password").value;
-						const fileField = document.getElementById("file").value;
+          const form = document.querySelector("form");
 
-						if (passwordField === "") return;
-						if (fileField === "") return;
+          form.addEventListener("submit", async (event) => {
+            event.preventDefault();
 
-						const encoder = new TextEncoder();
-						window.crypto.subtle.digest("SHA-256", encoder.encode(passwordField)).then(value => {
-							console.log(value.byteLength);
-						});
+            const passwordField = form.querySelector("input[name="password"]").value;
+            const encoder = new TextEncoder();
 
-						fetch()
-					});
+            window.crypto.subtle.digest("SHA-256", encoder.encode(passwordField)).then(async (value) => {
+              const hashArray = Array.from(new Uint8Array(value));
+              const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+
+              const data = new FormData(form);
+              data.set("password", hashHex);
+
+              const response = await fetch("/login", {
+                method: "POST",
+                body: data
+              });
+
+              const result = await response.text();
+              console.log(result);
+            });
+          });
 				</script>
 			`;
 
@@ -50,8 +79,8 @@ export default {
 			});
 		}
 
-		if (pathname === "list") {
-			const list = await env.IMAGES.list();
+		// if (pathname === "list") {
+		// 	const list = await env.IMAGES.list();
 
 			// const svg = `
 			// 	<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400">
@@ -62,19 +91,12 @@ export default {
 			// 	</svg>
 			// `;
 
-			const svg = `<svg width="400" height="200"><text x="20" y="100">Hello!</text></svg>`;
-			const resvg = new Resvg(svg);
-			const png = resvg.render().asPng();
-
-			return new Response(png, { headers: { "Content-Type": "image/png" } });
-		}
-
-		if (pathname === "performlogin" && request.method === "POST") {
-			if (request.headers.get("Authorization") === null) return new Response("No authorization header", { status: 200 });
-
-    // Base64 sha-256
-			if (request.headers.get("Authorization") !== env.AUTHKEY) return new Response("Incorrect password", { status: 200 });
-		}
+			// const svg = `<svg width="400" height="200"><text x="20" y="100">Hello!</text></svg>`;
+			// const resvg = new Resvg(svg);
+			// const png = resvg.render().asPng();
+			//
+			// return new Response(png, { headers: { "Content-Type": "image/png" } });
+		// }
 
 		let asset;
 		if (!pathname.endsWith(".gif")) {
